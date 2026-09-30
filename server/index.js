@@ -10,9 +10,16 @@ const vite = production ? null : await (await import('vite')).createServer({ roo
 let inFlight = false, lastRequest = 0;
 const server = createServer(async (req, res) => {
   const send = (status, data) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
-  if (req.url?.split('?')[0] === '/api/review') {
+  const pathname = req.url?.split('?')[0].replace(/\/$/, '');
+  if (pathname?.startsWith('/api/')) {
+    const allowedOrigin = process.env.REVIEW_ALLOWED_ORIGIN || `http://${req.headers.host}`;
+    if (req.headers.origin && req.headers.origin !== allowedOrigin) return send(403, { error: 'This website is not allowed to access the review server. Configure REVIEW_ALLOWED_ORIGIN on the backend.' });
+    if (req.headers.origin) { res.setHeader('Access-Control-Allow-Origin', allowedOrigin); res.setHeader('Vary', 'Origin'); }
+    if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Methods': 'POST, GET, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Accept' }); return res.end(); }
+  }
+  if (pathname === '/api/health') return send(200, { status: 'ok', geminiConfigured: Boolean(process.env.GEMINI_API_KEY) });
+  if (pathname === '/api/review') {
     if (req.method !== 'POST') return send(405, { error: 'Use POST.' });
-    if (req.headers.origin && req.headers.origin !== `http://${req.headers.host}`) return send(403, { error: 'Cross-origin review is not allowed.' });
     if (!req.headers['content-type']?.startsWith('application/json')) return send(415, { error: 'Send JSON.' });
     if (inFlight || Date.now() - lastRequest < 5000) return send(429, { error: 'Wait a few seconds before another review.' });
     inFlight = true; lastRequest = Date.now();
@@ -25,6 +32,7 @@ const server = createServer(async (req, res) => {
     finally { inFlight = false; }
     return;
   }
+  if (pathname?.startsWith('/api/')) return send(404, { error: 'API route not found.' });
   if (vite) return vite.middlewares(req, res);
   try {
     const dist = resolve(root, 'dist');
@@ -35,4 +43,5 @@ const server = createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': type }); res.end(readFileSync(asset));
   } catch { res.writeHead(404); res.end('Not found'); }
 });
-server.listen(Number(process.env.PORT || 5173), '127.0.0.1', () => console.log('Business MCP: http://127.0.0.1:' + (process.env.PORT || 5173)));
+const host = process.env.HOST || '127.0.0.1';
+server.listen(Number(process.env.PORT || 5173), host, () => console.log(`Business MCP: http://${host}:${process.env.PORT || 5173}`));

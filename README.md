@@ -45,3 +45,13 @@ A section passes when its score is at least 80 AND the model lists no missing re
 - src/main.js: review UI, explicit submission, scores, feedback, confirmation and JSON export.
 
 Authentication and MCP server creation are not connected. The server binds to loopback for local development. Before public hosting, add authentication, per-user authorization/rate limits, proper proxy origin handling and transport security. The current global throttle is only a local starter safeguard. See docs/backend-contract.md for the broader integration plan.
+
+## Troubleshooting: review returns a page instead of JSON
+
+An error like `Unexpected token 'T', "The page c"... is not valid JSON` means POST /api/review received text or HTML from a web host, proxy or missing-route handler, rather than the Node review API. This is not a PDF similarity error. Serving only dist or using a frontend-only Vite server does not provide the Gemini API.
+
+For local use, run npm run dev and open the address it prints. For production on a Node-capable host, run npm install, npm run build, then npm start. Set GEMINI_API_KEY as a server environment secret, PORT as required by the host, HOST=0.0.0.0 when the host needs an externally reachable listener, and REVIEW_ALLOWED_ORIGIN to the exact public website origin (for example https://your-site.example). GET /api/health should return JSON with status ok; it never returns the key.
+
+If the frontend is on a static host, run the backend separately on a Node host. Set VITE_REVIEW_API_URL to the HTTPS backend origin before building the frontend, and REVIEW_ALLOWED_ORIGIN to the exact frontend origin on the backend. Rebuild and redeploy the frontend after changing VITE_REVIEW_API_URL. Configure the backend API key there; a local .env file does not configure a deployed service. Do not deploy this local starter publicly without the authentication and per-user controls described above.
+
+Unknown API paths now return JSON 404 responses rather than the frontend HTML. The browser checks response content type, status and assessment shape, so host errors show an actionable message instead of a JSON parsing exception.

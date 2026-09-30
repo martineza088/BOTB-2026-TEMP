@@ -1,6 +1,7 @@
 import './style.css';
 import { requirements, checkRequirements, PASS_SCORE } from './requirements.js';
 import { readPdf } from './pdf.js';
+import { requestReview } from './review-api.js';
 
 const app = document.querySelector('#app');
 const escape = value => String(value).replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
@@ -53,9 +54,7 @@ async function analyze() {
   reviewing = true; reviewError = ''; confirmed.clear();
   results = checkRequirements(pages); render();
   try {
-    const response = await fetch('/api/review', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pages }), signal: AbortSignal.timeout(70000) });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Review failed.');
+    const data = await requestReview(pages, { apiBase: import.meta.env.VITE_REVIEW_API_URL || '' });
     results = data.sections;
   } catch (error) { reviewError = error.name === 'TimeoutError' ? 'Review timed out. Try again.' : error.message; }
   finally { reviewing = false; render(); }
