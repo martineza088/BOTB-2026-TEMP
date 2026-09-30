@@ -1,5 +1,6 @@
 import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist';
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { extractPageText } from './pdf-text.js';
 GlobalWorkerOptions.workerSrc = workerUrl;
 
 export async function readPdf(file, onProgress = () => {}) {
@@ -14,7 +15,7 @@ export async function readPdf(file, onProgress = () => {}) {
     for (let number = 1; number <= document.numPages; number++) {
       const page = await document.getPage(number);
       const content = await page.getTextContent();
-      pages.push({ number, text: content.items.map(item => item.str ?? '').join(' ').replace(/\s+/g, ' ').trim() });
+      pages.push({ number, text: extractPageText(content.items) });
       page.cleanup();
       onProgress(number, document.numPages);
     }

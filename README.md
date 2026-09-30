@@ -1,39 +1,47 @@
 # Business MCP starter
 
-A local, beginner-friendly setup interface for preparing a business packet before creating an MCP server.
+A guided business-packet review interface with heading-based extraction and server-side Gemini semantic assessment.
 
-## Run locally
+## Run
 
-Install Node.js 22.12 or newer, then run:
+Use Node.js 22.12 or newer:
 
-```sh
+```
 npm install
-npm run dev
 ```
 
-Open the local address printed by Vite. `npm run build` creates the production frontend in `dist`. `npm test` checks the document validation rules.
+Copy `.env.example` to `.env`, set `GEMINI_API_KEY` using a key from https://aistudio.google.com/apikey, then run `npm run dev`. Open http://127.0.0.1:5173. Never put the key in a VITE_ variable or commit `.env`.
 
-## Included
+`npm test` runs parser and mocked Gemini checks. `npm run build` builds the browser files. `npm run preview` serves the build AND the review API. Static hosting alone cannot run Gemini review.
 
-- Responsive three-step setup guide.
-- PDF selection and browser-side text extraction with PDF.js; 20 MB and 100-page limits.
-- Visible requirements for products/menu, pricing, inventory, policies, location, hours, and branding.
-- Conservative keyword-based evidence suggestions with excerpts and page numbers.
-- Manual confirmation before continuing and a downloadable JSON review report.
-- Helpful errors for unreadable, protected, or scanned documents.
+## Document headings
 
-## Deliberate integration boundaries
+Put each heading on a separate line. Case is ignored; numeric prefixes like `01 /` are supported:
 
-This is a frontend starter. The Account setup button explains that authentication is not connected. It does not simulate login. No PDF, progress, or account data is stored or uploaded. Refreshing clears the review. Scanned pages need OCR; mixed scanned/text documents may have missing evidence.
+1. Business Profile: business identity, owner, model, location, contact details, hours and time zone.
+2. Products and Pricing: names, descriptions, units, prices, currency, taxes and fees.
+3. Inventory and Availability: inventory table linked to products, quantities and availability definitions.
+4. Sample Business Policies: payments, returns, warranty, fulfillment, cancellations and customer information.
+5. Branding: brand name, voice, colors and logo guidance.
 
-Keyword matches cannot establish completeness, factual accuracy, or freshness. Prices receive a basic currency/number check; other categories require manual review and may produce false positives or negatives. Heading-only matches remain unclear. Replace or augment these rules with structured extraction and semantic validation before production use. The review report includes excerpts rather than a full business dataset.
+Content continues until the next recognized section heading, including across pages. Subheadings such as Opening hours stay inside Business Profile. Duplicate headings append to the same section. Cover material before the first heading is ignored. PDF line geometry is preserved; complex column layouts or scans may still require a cleaner text-based export. Limit: 20 MB, 100 pages, 200,000 extracted text characters for Gemini review.
 
-## Next implementation steps
+## Gemini review
 
-1. Connect an authentication provider and enforce session/ownership checks on every backend route. Never put secrets in browser code.
-2. Add authenticated packet storage and processing if needed; define retention and deletion behavior.
-3. Add OCR and structured extraction that returns fields plus source-page evidence; let users correct results.
-4. Connect the chosen MCP product through a backend adapter. See `docs/backend-contract.md`.
-5. Implement the server tools, an authenticated MCP endpoint, and a connection test. The current starter does not create or host MCP servers.
+Selecting a PDF extracts text locally. The user explicitly selects Send to Gemini for review before text is sent through POST /api/review to Google. This starter does not persist the PDF or review. Free-tier Google data-use terms apply; check https://ai.google.dev/gemini-api/docs/pricing before sending business information.
 
-Files: `src/main.js` (workflow), `src/pdf.js` (extraction), `src/requirements.js` (validation), `src/style.css` (design).
+The default model is `gemini-2.5-flash-lite`, configurable through server-only `GEMINI_MODEL`. Google lists a free tier, subject to eligibility, availability and quotas. Paid project settings can incur charges; this code cannot guarantee no billing.
+
+The NLP prompt compares each heading-delimited section to a shared expected-content summary. Structured JSON returns section id, similarity score (0-100), explanatory feedback, and missing requirements. This is a model-assigned semantic suitability score, not cosine similarity, calibrated confidence, or real-world verification. There is no separate NLP service or code execution tool.
+
+A section passes when its score is at least 80 AND the model lists no missing requirements. Missing/empty headings never pass. Malformed responses, timeouts, missing keys and quota errors fail closed. All five sections must pass and receive human confirmation before continuing. Edit PASS_SCORE in src/requirements.js to tune the threshold; validate it on representative good/incomplete packets before production use.
+
+## Implementation
+
+- src/requirements.js: headings, expected summaries, section parser and threshold.
+- src/pdf.js: PDF.js text extraction preserving lines.
+- server/review.js: prompt, response schema, validation and pass decision.
+- server/index.js: same-origin local review API, request limits, timeout and basic throttling; dev and production frontend serving.
+- src/main.js: review UI, explicit submission, scores, feedback, confirmation and JSON export.
+
+Authentication and MCP server creation are not connected. The server binds to loopback for local development. Before public hosting, add authentication, per-user authorization/rate limits, proper proxy origin handling and transport security. The current global throttle is only a local starter safeguard. See docs/backend-contract.md for the broader integration plan.
